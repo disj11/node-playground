@@ -1,0 +1,29 @@
+{
+  "name": "converter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node index.ts",
+    "build": "tsc index.ts",
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ffmpeg-concat": "^1.2.3",
+    "ffmpeg-stream": "^0.6.0",
+    "image-size": "^0.8.3",
+    "koa": "^2.13.0",
+    "node-fetch": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/ffmpeg-concat": "^1.1.0",
+    "@types/koa": "^2.11.3",
+    "@types/node": "^14.0.26",
+    "@types/node-fetch": "^2.5.7",
+    "ts-node": "^8.10.2",
+    "typescript": "^3.9.7"
+  }
+}
