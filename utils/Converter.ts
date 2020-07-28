@@ -4,13 +4,17 @@ import {HttpUtils} from "./HttpUtils";
 import * as fs from "fs";
 import {Writable} from "stream";
 import {ImageUtils} from "./ImageUtils";
+import * as Xvfb from "xvfb";
+
 const concat = require('ffmpeg-concat');
+const xvfb = new Xvfb();
 
 export class Converter {
     private static readonly TEMP_DIR = 'tmp/node-converter';
 
     public static async overlay(videoUrl: string, imageUrl: string, savePath: string) {
         await this._overlay(videoUrl, imageUrl, fs.createWriteStream(savePath));
+        return savePath;
     }
 
     private static async _overlay(videoUrl: string, imageUrl: string, writable: Writable) {
@@ -41,7 +45,7 @@ export class Converter {
         console.log('successful completion!');
     }
 
-    public static async concat(videoUrls: Array<string>, savePath: string) {
+    public static async concat(videoUrls: Array<string>, savePath: string): Promise<string> {
         this.createTempDirIfNotExist();
 
         const videos = [];
@@ -51,6 +55,7 @@ export class Converter {
         }
 
         console.log('Processing(concat)...');
+        xvfb.startSync();
         await concat({
             tempDir: this.TEMP_DIR,
             output: savePath,
@@ -60,12 +65,15 @@ export class Converter {
                 duration: 1000,
             }
         });
+        xvfb.stopSync();
 
         console.log('deleting temp files...');
         for (const video of videos) {
             fs.unlinkSync(video);
         }
         console.log('successful completion!');
+
+        return savePath;
     }
 
     private static async resize(videoPath: string, width: number, height: number, writable: Writable) {

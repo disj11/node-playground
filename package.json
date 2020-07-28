@@ -16,7 +16,8 @@
     "ffmpeg-stream": "^0.6.0",
     "image-size": "^0.8.3",
     "koa": "^2.13.0",
-    "node-fetch": "^2.6.0"
+    "node-fetch": "^2.6.0",
+    "xvfb": "^0.4.0"
   },
   "devDependencies": {
     "@types/ffmpeg-concat": "^1.1.0",
