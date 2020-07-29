@@ -28,7 +28,7 @@ export class Converter {
 
         console.log('Resizing video...');
         const imageSize = ImageUtils.getImageSize(imagePath);
-        await this.resize(videoPath, imageSize.width, imageSize.height, converter.createInputStream({f: 'mp4'}));
+        await this.resize(videoPath, imageSize.width, -2, converter.createInputStream({f: 'mp4'}));
 
         converter.createInputFromFile(imagePath, {f: 'image2'});
         converter.createOutputStream({
