@@ -3,7 +3,6 @@ import * as path from "path";
 import {HttpUtils} from "./HttpUtils";
 import * as fs from "fs";
 import {Writable} from "stream";
-import {ImageUtils} from "./ImageUtils";
 import * as Xvfb from "xvfb";
 
 const concat = require('ffmpeg-concat');
@@ -26,10 +25,7 @@ export class Converter {
         const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(this.TEMP_DIR, `${date.getTime()}_video`));
         const imagePath = await HttpUtils.downloadResource(imageUrl, path.resolve(this.TEMP_DIR, `${date.getTime()}_image`));
 
-        console.log('Resizing video...');
-        const imageSize = ImageUtils.getImageSize(imagePath);
-        await this.resize(videoPath, imageSize.width, -2, converter.createInputStream({f: 'mp4'}));
-
+        converter.createInputFromFile(videoPath, {f: 'mp4'});
         converter.createInputFromFile(imagePath, {f: 'image2'});
         converter.createOutputStream({
             f: 'ismv',
@@ -74,6 +70,32 @@ export class Converter {
         console.log('successful completion!');
 
         return savePath;
+    }
+
+    /**
+     * @param videoUrl 동영상 URL
+     * @param start seconds
+     * @param duration seconds
+     * @param savePath 동영상 저장 위치
+     */
+    public static async cut(videoUrl: string, start: number, duration: number, savePath: string) {
+        this.createTempDirIfNotExist();
+
+        const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(this.TEMP_DIR, `${new Date().getTime()}_video`));
+        await this._cut(videoPath, start, duration, fs.createWriteStream(savePath));
+    }
+
+    private static async _cut(videoPath: string, start: number, duration: number, writable: Writable) {
+        const converter = ffmpeg();
+        converter.createInputFromFile(videoPath, {
+            f: 'mp4',
+            ss: start,
+            t: duration,
+        });
+        converter.createOutputStream({
+            f: 'ismv',
+        }).pipe(writable);
+        await converter.run();
     }
 
     private static async resize(videoPath: string, width: number, height: number, writable: Writable) {
