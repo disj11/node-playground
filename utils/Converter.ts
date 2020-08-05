@@ -1,9 +1,8 @@
-import {ffmpeg} from "ffmpeg-stream";
-import * as path from "path";
-import {HttpUtils} from "./HttpUtils";
 import * as fs from "fs";
-import {Writable} from "stream";
 import * as Xvfb from "xvfb";
+import * as ffmpeg from "fluent-ffmpeg";
+import {HttpUtils} from "./HttpUtils";
+import * as path from "path";
 
 const concat = require('ffmpeg-concat');
 const xvfb = new Xvfb();
@@ -11,49 +10,41 @@ const xvfb = new Xvfb();
 export class Converter {
     private static readonly TEMP_DIR = 'tmp/node-converter';
 
-    public static async overlay(videoUrl: string, imageUrl: string, savePath: string) {
-        await this._overlay(videoUrl, imageUrl, fs.createWriteStream(savePath));
-        return savePath;
-    }
+    public static async overlay(videoUrl: string, imageUrl: string, savePath: string): Promise<string> {
+        const tempDir = this.createTempDirIfNotExist();
 
-    private static async _overlay(videoUrl: string, imageUrl: string, writable: Writable) {
-        this.createTempDirIfNotExist();
-        const converter = ffmpeg();
-
-        console.log('Downloading resource files...');
         const date = new Date();
-        const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(this.TEMP_DIR, `${date.getTime()}_video`));
-        const imagePath = await HttpUtils.downloadResource(imageUrl, path.resolve(this.TEMP_DIR, `${date.getTime()}_image`));
+        const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(tempDir, `${date.getTime()}_video`));
+        const imagePath = await HttpUtils.downloadResource(imageUrl, path.resolve(tempDir, `${date.getTime()}_image`));
 
-        converter.createInputFromFile(videoPath, {f: 'mp4'});
-        converter.createInputFromFile(imagePath, {f: 'image2'});
-        converter.createOutputStream({
-            f: 'ismv',
-            filter_complex: '[0:v][1:v] overlay=0:0',
-        }).pipe(writable);
+        return new Promise((resolve, reject) => {
+            const cmd = ffmpeg(videoPath)
+                .addInput(imagePath)
+                .complexFilter('[0:v][1:v]overlay=0:0')
+                .outputOptions([
+                    '-loglevel', 'info',
+                ])
+                .saveToFile(savePath)
+                .on('start', (cmd) => console.log({ cmd }))
+                .on('end', () => resolve(savePath))
+                .on('error', (err) => reject(err))
 
-        console.log('Processing(overlay)...');
-        await converter.run();
-
-        console.log('deleting temp files...');
-        fs.unlinkSync(videoPath);
-        fs.unlinkSync(imagePath);
-        console.log('successful completion!');
+            cmd.run();
+        });
     }
 
     public static async concat(videoUrls: Array<string>, savePath: string): Promise<string> {
-        this.createTempDirIfNotExist();
+        const tempDir = this.createTempDirIfNotExist();
 
         const videos = [];
         const date = new Date();
         for (let i = 0; i < videoUrls.length; i++) {
-            videos.push(await HttpUtils.downloadResource(videoUrls[i], path.resolve(this.TEMP_DIR, `${date.getTime()}_video_${i}`)));
+            videos.push(await HttpUtils.downloadResource(videoUrls[i], path.resolve(tempDir, `${date.getTime()}_video_${i}`)));
         }
 
-        console.log('Processing(concat)...');
         xvfb.startSync();
         await concat({
-            tempDir: this.TEMP_DIR,
+            tempDir: tempDir,
             output: savePath,
             videos: videos,
             transition: {
@@ -63,11 +54,9 @@ export class Converter {
         });
         xvfb.stopSync();
 
-        console.log('deleting temp files...');
         for (const video of videos) {
             fs.unlinkSync(video);
         }
-        console.log('successful completion!');
 
         return savePath;
     }
@@ -79,38 +68,31 @@ export class Converter {
      * @param savePath 동영상 저장 위치
      */
     public static async cut(videoUrl: string, start: number, duration: number, savePath: string) {
-        this.createTempDirIfNotExist();
+        const tempDir = this.createTempDirIfNotExist();
 
-        const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(this.TEMP_DIR, `${new Date().getTime()}_video`));
-        await this._cut(videoPath, start, duration, fs.createWriteStream(savePath));
-    }
+        const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(tempDir, `${new Date().getTime()}_video`));
+        return new Promise((resolve, reject) => {
+            const cmd = ffmpeg(videoPath)
+                .setStartTime(start)
+                .setDuration(duration)
+                .outputOptions([
+                    '-loglevel', 'info',
+                ])
+                .saveToFile(savePath)
+                .on('start', (cmd) => console.log({ cmd }))
+                .on('end', () => resolve(savePath))
+                .on('error', (err) => reject(err))
 
-    private static async _cut(videoPath: string, start: number, duration: number, writable: Writable) {
-        const converter = ffmpeg();
-        converter.createInputFromFile(videoPath, {
-            f: 'mp4',
-            ss: start,
-            t: duration,
-        });
-        converter.createOutputStream({
-            f: 'ismv',
-        }).pipe(writable);
-        await converter.run();
-    }
-
-    private static async resize(videoPath: string, width: number, height: number, writable: Writable) {
-        const converter = ffmpeg();
-        converter.createInputFromFile(videoPath, {f: 'mp4'});
-        converter.createOutputStream({
-            f: 'ismv',
-            vf: `scale=${width}:${height}`,
-        }).pipe(writable);
-        await converter.run();
+            cmd.run();
+        })
     }
 
     private static createTempDirIfNotExist() {
-        if (!fs.existsSync(this.TEMP_DIR)) {
-            fs.mkdirSync(this.TEMP_DIR, {recursive: true});
+        const tempDir = path.resolve(this.TEMP_DIR, new Date().getTime().toString(10));
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, {recursive: true});
         }
+
+        return tempDir;
     }
 }
