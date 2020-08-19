@@ -42,21 +42,29 @@ export class Converter {
             videos.push(await HttpUtils.downloadResource(videoUrls[i], path.resolve(tempDir, `${date.getTime()}_video_${i}`)));
         }
 
+        await this._concat(videos, savePath);
+        for (const video of videos) {
+            fs.unlinkSync(video);
+        }
+
+        return savePath
+    }
+
+    private static async _concat(videoPaths: Array<string>, savePath: string): Promise<string> {
+        const tempDir = this.createTempDirIfNotExist();
+
         xvfb.startSync();
         await concat({
             tempDir: tempDir,
             output: savePath,
-            videos: videos,
+            videos: videoPaths,
+            log: stdout => console.log(stdout),
             transition: {
                 name: 'InvertedPageCurl',
                 duration: 1000,
             }
         });
         xvfb.stopSync();
-
-        for (const video of videos) {
-            fs.unlinkSync(video);
-        }
 
         return savePath;
     }
@@ -85,6 +93,24 @@ export class Converter {
 
             cmd.run();
         })
+    }
+
+    private static async _resize(filePath: string, size: string, savePath: string) {
+        return new Promise<string>((resolve, reject) => {
+            const cmd = ffmpeg(filePath)
+                .size(size)
+                .autoPad(true)
+                .outputOptions([
+                    '-loglevel', 'info',
+                ])
+                .outputFormat("mp4")
+                .saveToFile(savePath)
+                .on('start', (cmd) => console.log({cmd}))
+                .on('end', () => resolve(savePath))
+                .on('error', (err) => reject(err))
+
+            cmd.run();
+        });
     }
 
     private static createTempDirIfNotExist() {
