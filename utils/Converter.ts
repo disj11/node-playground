@@ -3,6 +3,7 @@ import * as Xvfb from "xvfb";
 import * as ffmpeg from "fluent-ffmpeg";
 import {HttpUtils} from "./HttpUtils";
 import * as path from "path";
+import {VideoUtils} from "./VideoUtils";
 
 const concat = require('ffmpeg-concat');
 const xvfb = new Xvfb();
@@ -43,21 +44,32 @@ export class Converter {
         }
 
         await this._concat(videos, savePath);
-        for (const video of videos) {
-            fs.unlinkSync(video);
-        }
-
         return savePath
     }
 
     private static async _concat(videoPaths: Array<string>, savePath: string): Promise<string> {
         const tempDir = this.createTempDirIfNotExist();
 
+        const metadata = await VideoUtils.getMetadata(videoPaths[0]);
+        const size = VideoUtils.getSize(metadata);
+        const resizeVideos = [videoPaths[0]];
+
+        const date = new Date();
+        for (let i = 1; i < videoPaths.length; i++) {
+            const currentVideoMetadata = await VideoUtils.getMetadata(videoPaths[i]);
+            const currentVideoSize = VideoUtils.getSize(currentVideoMetadata);
+
+            if (currentVideoSize.width !== size.width || currentVideoSize.height !== size.height) {
+                resizeVideos.push(await this._resize(videoPaths[i], `${size.width}x${size.height}`, path.resolve(tempDir, `${date.getTime()}_resize_video_${i}`)));
+            } else {
+                resizeVideos.push(videoPaths[i]);
+            }
+        }
+
         xvfb.startSync();
         await concat({
-            tempDir: tempDir,
             output: savePath,
-            videos: videoPaths,
+            videos: resizeVideos,
             log: stdout => console.log(stdout),
             transition: {
                 name: 'InvertedPageCurl',
@@ -65,6 +77,10 @@ export class Converter {
             }
         });
         xvfb.stopSync();
+
+        for (const video of resizeVideos) {
+            fs.unlinkSync(video);
+        }
 
         return savePath;
     }
