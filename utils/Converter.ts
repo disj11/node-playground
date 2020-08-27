@@ -4,6 +4,7 @@ import * as ffmpeg from "fluent-ffmpeg";
 import {HttpUtils} from "./HttpUtils";
 import * as path from "path";
 import {VideoUtils} from "./VideoUtils";
+import {FileUtils} from "./FileUtils";
 
 const concat = require('ffmpeg-concat');
 const xvfb = new Xvfb();
@@ -18,7 +19,7 @@ export class Converter {
         const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(tempDir, `${date.getTime()}_video`));
         const imagePath = await HttpUtils.downloadResource(imageUrl, path.resolve(tempDir, `${date.getTime()}_image`));
 
-        return new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
             const cmd = ffmpeg(videoPath)
                 .addInput(imagePath)
                 .complexFilter('[0:v][1:v]overlay=0:0')
@@ -32,6 +33,9 @@ export class Converter {
 
             cmd.run();
         });
+
+        FileUtils.removeAll([videoPath, imagePath]);
+        return savePath;
     }
 
     public static async concatWithoutTransition(videoUrls: Array<string>, savePath): Promise<string> {
@@ -43,7 +47,7 @@ export class Converter {
         }
 
         const resizeVideos = await this.resizeAll(videos, tempDir);
-        return new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
             const cmd = ffmpeg();
             resizeVideos.forEach(videoPath => cmd.input(videoPath));
             cmd
@@ -52,6 +56,9 @@ export class Converter {
                 .on('error', err => reject(err))
                 .mergeToFile(savePath);
         });
+
+        FileUtils.removeAll([...videos, ...resizeVideos]);
+        return savePath;
     }
 
     public static async concat(videoUrls: Array<string>, savePath: string): Promise<string> {
@@ -120,7 +127,7 @@ export class Converter {
         const tempDir = this.createTempDirIfNotExist();
 
         const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(tempDir, `${new Date().getTime()}_video`));
-        return new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
             const cmd = ffmpeg(videoPath)
                 .setStartTime(start)
                 .setDuration(duration)
@@ -133,7 +140,10 @@ export class Converter {
                 .on('error', (err) => reject(err))
 
             cmd.run();
-        })
+        });
+
+        FileUtils.removeAll([videoPath]);
+        return savePath;
     }
 
     private static async _resize(filePath: string, size: string, savePath: string) {
