@@ -4,7 +4,7 @@ import * as ffmpeg from "fluent-ffmpeg";
 import {FfprobeData} from "fluent-ffmpeg";
 
 export class VideoUtils {
-    public static async getMetadata(url: string): Promise<FfprobeData> {
+    public static async getMetadataByUrl(url: string): Promise<FfprobeData> {
         const response = await fetch(url);
         const passThrough = new PassThrough();
         response.body.pipe(passThrough);
@@ -12,6 +12,20 @@ export class VideoUtils {
         return new Promise((resolve, reject) => {
             ffmpeg()
                 .addInput(passThrough)
+                .ffprobe((err, data) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(data);
+                    }
+                });
+        })
+    }
+
+    public static async getMetadata(path: string): Promise<FfprobeData> {
+        return new Promise((resolve, reject) => {
+            ffmpeg()
+                .addInput(path)
                 .ffprobe((err, data) => {
                     if (err) {
                         reject(err);

@@ -34,6 +34,26 @@ export class Converter {
         });
     }
 
+    public static async concatWithoutTransition(videoUrls: Array<string>, savePath): Promise<string> {
+        const tempDir = this.createTempDirIfNotExist();
+        const date = new Date();
+        const videos = [];
+        for (let i = 0; i < videoUrls.length; i++) {
+            videos.push(await HttpUtils.downloadResource(videoUrls[i], path.resolve(tempDir, `${date.getTime()}_video_${i}`)));
+        }
+
+        const resizeVideos = await this.resizeAll(videos, tempDir);
+        return new Promise((resolve, reject) => {
+            const cmd = ffmpeg();
+            resizeVideos.forEach(videoPath => cmd.input(videoPath));
+            cmd
+                .on('start', cmd => console.log({cmd}))
+                .on('end', () => resolve(savePath))
+                .on('error', err => reject(err))
+                .mergeToFile(savePath);
+        });
+    }
+
     public static async concat(videoUrls: Array<string>, savePath: string): Promise<string> {
         const tempDir = this.createTempDirIfNotExist();
 
@@ -49,22 +69,7 @@ export class Converter {
 
     private static async _concat(videoPaths: Array<string>, savePath: string): Promise<string> {
         const tempDir = this.createTempDirIfNotExist();
-
-        const metadata = await VideoUtils.getMetadata(videoPaths[0]);
-        const size = VideoUtils.getSize(metadata);
-        const resizeVideos = [videoPaths[0]];
-
-        const date = new Date();
-        for (let i = 1; i < videoPaths.length; i++) {
-            const currentVideoMetadata = await VideoUtils.getMetadata(videoPaths[i]);
-            const currentVideoSize = VideoUtils.getSize(currentVideoMetadata);
-
-            if (currentVideoSize.width !== size.width || currentVideoSize.height !== size.height) {
-                resizeVideos.push(await this._resize(videoPaths[i], `${size.width}x${size.height}`, path.resolve(tempDir, `${date.getTime()}_resize_video_${i}`)));
-            } else {
-                resizeVideos.push(videoPaths[i]);
-            }
-        }
+        const resizeVideos = await this.resizeAll(videoPaths, tempDir);
 
         xvfb.startSync();
         await concat({
@@ -83,6 +88,26 @@ export class Converter {
         }
 
         return savePath;
+    }
+
+    private static async resizeAll(videoPaths: Array<string>, saveDir: string): Promise<Array<string>> {
+        const metadata = await VideoUtils.getMetadata(videoPaths[0]);
+        const size = VideoUtils.getSize(metadata);
+        const resizeVideos = [videoPaths[0]];
+
+        const date = new Date();
+        for (let i = 1; i < videoPaths.length; i++) {
+            const currentVideoMetadata = await VideoUtils.getMetadata(videoPaths[i]);
+            const currentVideoSize = VideoUtils.getSize(currentVideoMetadata);
+
+            if (currentVideoSize.width !== size.width || currentVideoSize.height !== size.height) {
+                resizeVideos.push(await this._resize(videoPaths[i], `${size.width}x${size.height}`, path.resolve(saveDir, `${date.getTime()}_resize_video_${i}`)));
+            } else {
+                resizeVideos.push(videoPaths[i]);
+            }
+        }
+
+        return resizeVideos;
     }
 
     /**
