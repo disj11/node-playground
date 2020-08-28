@@ -19,8 +19,13 @@ export class Converter {
         const videoPath = await HttpUtils.downloadResource(videoUrl, path.resolve(tempDir, `${date.getTime()}_video`));
         const imagePath = await HttpUtils.downloadResource(imageUrl, path.resolve(tempDir, `${date.getTime()}_image`));
 
+        const metadata = await VideoUtils.getMetadata(imagePath);
+        const size = VideoUtils.getSize(metadata);
+        const resizeVideoPath = path.resolve(tempDir, `${date.getTime()}_resize_video`);
+        await this._resize(videoPath, `${size.width}x${size.height}`, resizeVideoPath);
+
         await new Promise((resolve, reject) => {
-            const cmd = ffmpeg(videoPath)
+            const cmd = ffmpeg(resizeVideoPath)
                 .addInput(imagePath)
                 .complexFilter('[0:v][1:v]overlay=0:0')
                 .outputOptions([
@@ -34,7 +39,7 @@ export class Converter {
             cmd.run();
         });
 
-        FileUtils.removeAll([videoPath, imagePath]);
+        FileUtils.removeAll([videoPath, imagePath, resizeVideoPath]);
         return savePath;
     }
 
@@ -150,7 +155,6 @@ export class Converter {
         return new Promise<string>((resolve, reject) => {
             const cmd = ffmpeg(filePath)
                 .size(size)
-                .autoPad(true)
                 .outputOptions([
                     '-loglevel', 'info',
                 ])
