@@ -151,10 +151,11 @@ export class Converter {
         return savePath;
     }
 
-    private static async _resize(filePath: string, size: string, savePath: string) {
+    public static async _resize(filePath: string, size: string, savePath: string) {
         return new Promise<string>((resolve, reject) => {
             const cmd = ffmpeg(filePath)
                 .size(size)
+                .autoPad(true)
                 .outputOptions([
                     '-loglevel', 'info',
                 ])
